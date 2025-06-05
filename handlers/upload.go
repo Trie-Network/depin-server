@@ -20,7 +20,7 @@ func HandleFileUpload(c *gin.Context) {
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
 		utils.LogInfo("Error reading file: %v", err)
-		c.String(http.StatusBadRequest, "File read error")
+		utils.RespondError(c, http.StatusBadRequest, "File read error", err)
 		return
 	}
 	defer file.Close()
@@ -28,14 +28,15 @@ func HandleFileUpload(c *gin.Context) {
 	assetName := c.PostForm("assetName")
 	if assetName == "" {
 		utils.LogInfo("Missing assetName in upload request")
-		c.String(http.StatusBadRequest, "Missing assetName field")
+		utils.RespondError(c, http.StatusBadRequest, "Missing assetName field", fmt.Errorf("assetName is required"))
 		return
 	}
 
+	// Use assetName directly (no sanitization)
 	uploadDir = filepath.Join(uploadDir, assetName)
 	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
 		utils.LogInfo("Failed to create directory: %v", err)
-		c.String(http.StatusInternalServerError, "Upload directory error")
+		utils.RespondError(c, http.StatusInternalServerError, "Upload directory error", err)
 		return
 	}
 
@@ -43,19 +44,22 @@ func HandleFileUpload(c *gin.Context) {
 	outFile, err := os.Create(dstPath)
 	if err != nil {
 		utils.LogInfo("Error creating destination file: %v", err)
-		c.String(http.StatusInternalServerError, "File creation error")
+		utils.RespondError(c, http.StatusInternalServerError, "File creation error", err)
 		return
 	}
 	defer outFile.Close()
 
 	if _, err := io.Copy(outFile, file); err != nil {
 		utils.LogInfo("Error saving file: %v", err)
-		c.String(http.StatusInternalServerError, "File write error")
+		utils.RespondError(c, http.StatusInternalServerError, "File write error", err)
 		return
 	}
 
 	utils.LogInfo("File uploaded: %s (Asset: %s)", header.Filename, assetName)
 	utils.AppendModelMetadata(assetName)
 
-	c.String(http.StatusOK, fmt.Sprintf("Uploaded %s", header.Filename))
+	utils.RespondSuccess(c, "File uploaded successfully", gin.H{
+		"fileName":  header.Filename,
+		"assetName": assetName,
+	})
 }

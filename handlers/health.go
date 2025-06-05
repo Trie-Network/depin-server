@@ -1,16 +1,18 @@
 package handlers
 
 import (
-	"net/http"
+	"depin-server/utils"
 	"os"
 
 	"github.com/gin-gonic/gin"
 )
 
 func HandleHealthCheck(c *gin.Context) {
+	status := "NOOP"
 	if os.Getenv("ENABLE_ASSET_UPLOAD") == "true" {
-		c.String(http.StatusOK, "OK")
-	} else {
-		c.String(http.StatusOK, "NOOP")
+		status = "OK"
 	}
+	utils.RespondSuccess(c, "Health check", gin.H{
+		"status": status,
+	})
 }
