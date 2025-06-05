@@ -3,3 +3,5 @@
 uploads/
 artifacts/
 config/
+
+*.log
