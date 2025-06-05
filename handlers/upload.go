@@ -32,6 +32,7 @@ func HandleFileUpload(c *gin.Context) {
 		return
 	}
 
+	uploadDir = filepath.Join(uploadDir, assetName)
 	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
 		utils.LogInfo("Failed to create directory: %v", err)
 		c.String(http.StatusInternalServerError, "Upload directory error")
