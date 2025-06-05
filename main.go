@@ -40,9 +40,8 @@ func main() {
 
 		if os.Getenv("ENABLE_ASSET_UPLOAD") == "true" {
 			api.POST("/upload", handlers.HandleFileUpload)
-			utils.LogInfo("Upload endpoint enabled")
 		} else {
-			utils.LogInfo("Upload endpoint disabled (ENABLE_ASSET_UPLOAD is not true)")
+			utils.LogInfo("Depin Server is not accepting new assets, enable ENABLE_ASSET_UPLOAD to allow uploads")
 		}
 	}
 
