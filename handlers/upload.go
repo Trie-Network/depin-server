@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -66,6 +67,8 @@ func HandleFileUpload(c *gin.Context) {
 		return
 	}
 
+	defer deleteFile(dstPath)
+
 	assetID, err := rubix.GenerateAssetHash(assetName, assetType)
 	if err != nil {
 		utils.LogInfo("Error generating asset hash: %v", err)
@@ -81,9 +84,17 @@ func HandleFileUpload(c *gin.Context) {
 
 	utils.LogInfo("File uploaded: %s (Asset: %s, Type: %s)", header.Filename, assetName, assetType)
 	utils.RespondSuccess(c, "File uploaded successfully", gin.H{
-		"fileName": header.Filename,
+		"fileName":  header.Filename,
 		"assetName": assetName,
 		"assetType": assetType,
-		"assetId": assetID,
+		"assetId":   assetID,
 	})
+}
+
+func deleteFile(filePath string) error {
+	err := os.Remove(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to delete file %s: %w", filePath, err)
+	}
+	return nil
 }
