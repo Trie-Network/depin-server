@@ -1,20 +1,22 @@
 package handlers
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 
-	"github.com/gin-gonic/gin"
+	"depin-server/constants"
+	"depin-server/rubix"
 	"depin-server/utils"
+
+	"github.com/gin-gonic/gin"
 )
 
 func HandleFileUpload(c *gin.Context) {
-	uploadDir := os.Getenv("UPLOAD_DIR")
-	if uploadDir == "" {
-		uploadDir = "uploads"
+	uploadRoot := os.Getenv("UPLOAD_DIR")
+	if uploadRoot == "" {
+		uploadRoot = "uploads"
 	}
 
 	file, header, err := c.Request.FormFile("file")
@@ -26,14 +28,23 @@ func HandleFileUpload(c *gin.Context) {
 	defer file.Close()
 
 	assetName := c.PostForm("assetName")
-	if assetName == "" {
-		utils.LogInfo("Missing assetName in upload request")
-		utils.RespondError(c, http.StatusBadRequest, "Missing assetName field", fmt.Errorf("assetName is required"))
+	assetType := c.PostForm("assetType")
+
+	if assetName == "" || assetType == "" {
+		utils.LogInfo("Missing assetName or assetType in request")
+		utils.RespondError(c, http.StatusBadRequest, "Both assetName and assetType fields are required", nil)
 		return
 	}
 
-	// Use assetName directly (no sanitization)
-	uploadDir = filepath.Join(uploadDir, assetName)
+	switch assetType {
+	case constants.ASSET_TYPE_DATASET, constants.ASSET_TYPE_MODEL:
+	default:
+		utils.LogInfo("Invalid assetType: %s", assetType)
+		utils.RespondError(c, http.StatusBadRequest, "Invalid assetType. Must be 'model' or 'dataset'", nil)
+		return
+	}
+
+	uploadDir := filepath.Join(uploadRoot, assetType+"s", assetName)
 	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
 		utils.LogInfo("Failed to create directory: %v", err)
 		utils.RespondError(c, http.StatusInternalServerError, "Upload directory error", err)
@@ -55,11 +66,24 @@ func HandleFileUpload(c *gin.Context) {
 		return
 	}
 
-	utils.LogInfo("File uploaded: %s (Asset: %s)", header.Filename, assetName)
-	utils.AppendModelMetadata(assetName)
+	assetID, err := rubix.GenerateAssetHash(assetName, assetType)
+	if err != nil {
+		utils.LogInfo("Error generating asset hash: %v", err)
+		utils.RespondError(c, http.StatusInternalServerError, "Asset ID generation failed", err)
+		return
+	}
 
+	if err := utils.AppendAssetMetadata(assetType, assetName, assetID); err != nil {
+		utils.LogInfo("Error updating metadata: %v", err)
+		utils.RespondError(c, http.StatusInternalServerError, "Metadata write error", err)
+		return
+	}
+
+	utils.LogInfo("File uploaded: %s (Asset: %s, Type: %s)", header.Filename, assetName, assetType)
 	utils.RespondSuccess(c, "File uploaded successfully", gin.H{
-		"fileName":  header.Filename,
+		"fileName": header.Filename,
 		"assetName": assetName,
+		"assetType": assetType,
+		"assetId": assetID,
 	})
 }

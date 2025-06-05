@@ -1,53 +1,58 @@
 package utils
 
 import (
+	"depin-server/constants"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 )
 
-type ModelEntry struct {
+type AssetEntry struct {
 	Name    string `json:"name"`
 	AssetID string `json:"assetId"`
 }
 
-type ModelsFile struct {
-	Models []ModelEntry `json:"models"`
+type AssetMetadata struct {
+	Models   []AssetEntry `json:"models"`
+	Datasets []AssetEntry `json:"datasets"`
 }
 
-const modelsPath = "config/models.json"
+func AppendAssetMetadata(assetType, name, assetId string) error {
+	metaPath := filepath.Join("config", "assets.json")
 
-func AppendModelMetadata(assetName string) {
-	if err := os.MkdirAll(filepath.Dir(modelsPath), os.ModePerm); err != nil {
-		LogInfo("Failed to create config directory: %v", err)
-		return
+	var metadata AssetMetadata
+	if _, err := os.Stat(metaPath); os.IsNotExist(err) {
+		metadata = AssetMetadata{}
+	} else {
+		f, err := os.Open(metaPath)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		if err := json.NewDecoder(f).Decode(&metadata); err != nil {
+			return err
+		}
 	}
 
-	var models ModelsFile
+	newEntry := AssetEntry{Name: name, AssetID: assetId}
 
-	// Read existing models.json
-	if data, err := os.ReadFile(modelsPath); err == nil {
-		json.Unmarshal(data, &models)
+	switch assetType {
+	case constants.ASSET_TYPE_MODEL:
+		metadata.Models = append(metadata.Models, newEntry)
+	case constants.ASSET_TYPE_DATASET:
+		metadata.Datasets = append(metadata.Datasets, newEntry)
+	default:
+		return fmt.Errorf("invalid assetType: %s", assetType)
 	}
 
-	// Add new entry
-	models.Models = append(models.Models, ModelEntry{
-		Name:    assetName,
-		AssetID: "",
-	})
-
-	// Write back
-	file, err := os.Create(modelsPath)
+	f, err := os.Create(metaPath)
 	if err != nil {
-		LogInfo("Failed to write models.json: %v", err)
-		return
+		return err
 	}
-	defer file.Close()
+	defer f.Close()
 
-	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "    ")
-	if err := encoder.Encode(models); err != nil {
-		LogInfo("Failed to encode models.json: %v", err)
-	}
-	LogInfo("Added assetName '%s' to models.json", assetName)
+	enc := json.NewEncoder(f)
+	enc.SetIndent("", "    ")
+	return enc.Encode(metadata)
 }
