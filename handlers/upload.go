@@ -67,7 +67,7 @@ func HandleFileUpload(c *gin.Context) {
 		return
 	}
 
-	defer deleteFile(dstPath)
+	defer deleteFile(uploadDir)
 
 	assetID, err := rubix.GenerateAssetHash(assetName, assetType)
 	if err != nil {
