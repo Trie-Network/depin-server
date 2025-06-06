@@ -39,7 +39,9 @@ func main() {
 		api.GET("/healthz", handlers.HandleHealthCheck)
 
 		if os.Getenv("ENABLE_ASSET_UPLOAD") == "true" {
-			api.POST("/upload", handlers.HandleFileUpload)
+			api.POST("/upload", handlers.HandleFileUpload)			
+			api.POST("/inference", handlers.HandleInference)
+
 		} else {
 			utils.LogInfo("Depin Server is not accepting new assets, enable ENABLE_ASSET_UPLOAD to allow uploads")
 		}
