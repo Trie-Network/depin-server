@@ -35,9 +35,9 @@ func runModel(modelInfo *ModelInfo) error {
 }
 
 func runModelWithOllama(assetID, assetName, filename string) error {
-	createScriptPath := os.Getenv("CREATE_OLLAMA_MODEL")
+	createScriptPath := os.Getenv("CREATE_OLLAMA_MODEL_SCRIPT")
 	if createScriptPath == "" {
-		return fmt.Errorf("CREATE_OLLAMA_MODEL is not set")
+		return fmt.Errorf("CREATE_OLLAMA_MODEL_SCRIPT is not set")
 	}
 
 	ggufPath := getAssetLocation(assetID, filename)
