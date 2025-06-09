@@ -3,5 +3,6 @@
 uploads/
 artifacts/
 config/
+models/
 
 *.log
