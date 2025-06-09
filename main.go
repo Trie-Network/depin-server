@@ -19,9 +19,9 @@ func main() {
 	}
 
 	logFilePath := os.Getenv("LOG_FILE")
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	depinServerPort := os.Getenv("SERVER_PORT")
+	if depinServerPort == "" {
+		depinServerPort = "8080"
 	}
 
 	logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
@@ -34,19 +34,19 @@ func main() {
 
 	r := gin.Default()
 
-	api := r.Group("/depin-server/v1")
+	apiV1 := r.Group("/depin-server/v1")
 	{
-		api.GET("/healthz", handlers.HandleHealthCheck)
+		apiV1.GET("/healthz", handlers.HandleHealthCheck)
 
 		if os.Getenv("ENABLE_ASSET_UPLOAD") == "true" {
-			api.POST("/upload", handlers.HandleFileUpload)			
-			api.POST("/inference", handlers.HandleInference)
-
+			apiV1.POST("/upload", handlers.HandleFileUpload)			
+			apiV1.POST("/inference", handlers.HandleInference)
+			apiV1.GET("/assets", handlers.HandleGetAssets)
 		} else {
-			utils.LogInfo("Depin Server is not accepting new assets, enable ENABLE_ASSET_UPLOAD to allow uploads")
+			utils.LogInfo("Depin Server is not accepting new assets, set ENABLE_ASSET_UPLOAD to true to allow uploads")
 		}
 	}
 
-	utils.LogInfo("Depin server started on port %s", port)
-	r.Run(":" + port)
+	utils.LogInfo("Depin server started on port %s", depinServerPort)
+	r.Run(":" + depinServerPort)
 }
