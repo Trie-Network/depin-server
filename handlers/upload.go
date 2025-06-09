@@ -82,8 +82,22 @@ func HandleFileUpload(c *gin.Context) {
 		return
 	}
 
+	if assetType == constants.ASSET_TYPE_MODEL  {
+		modelInfo := &ModelInfo{
+			AssetID:       assetID,
+			AssetName:     assetName,
+			AssetFileName: header.Filename,
+		}
+
+		if err := runModel(modelInfo); err != nil {
+			utils.LogInfo("Failed to start Ollama model: %v", err)
+			utils.RespondError(c, http.StatusInternalServerError, "Failed to launch model with Ollama", err)
+			return
+		}
+	}
+
 	utils.LogInfo("File uploaded: %s (Asset: %s, Type: %s)", header.Filename, assetName, assetType)
-	utils.RespondSuccess(c, "File uploaded successfully", gin.H{
+	utils.RespondSuccess(c, "Asset uploaded successfully", gin.H{
 		"fileName":  header.Filename,
 		"assetName": assetName,
 		"assetType": assetType,
@@ -97,4 +111,11 @@ func deleteFile(filePath string) error {
 		return fmt.Errorf("failed to delete file %s: %w", filePath, err)
 	}
 	return nil
+}
+
+func getAssetLocation(assetID string, filename string) string {
+	homeDir := os.Getenv("HOME")
+
+	// TODO: handle build dir for other OS
+	return filepath.Join(homeDir, "depin", "rubixgoplatform", "linux", "node0", "NFT", assetID, filename)
 }
