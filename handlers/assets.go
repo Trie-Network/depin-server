@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"os"
 
-	"github.com/gin-gonic/gin"
 	"depin-server/utils"
+
+	"github.com/gin-gonic/gin"
 )
 
 type AssetEntry struct {
@@ -41,4 +42,22 @@ func HandleGetAssets(c *gin.Context) {
 	}
 
 	utils.RespondSuccess(c, "Assets fetched successfully", metadata)
+}
+
+func HandleDownloadAsset(c *gin.Context) {
+	assetID := c.Param("assetId")
+	if assetID == "" {
+		utils.RespondError(c, 400, "Asset ID is required", nil)
+		return
+	}
+
+	assetPath := getAssetLocation(assetID)
+	if _, err := os.Stat(assetPath); os.IsNotExist(err) {
+		utils.LogInfo("Asset not found: %s", assetPath)
+		utils.RespondError(c, 404, "Asset not found", nil)
+		return
+	}
+
+	c.File(assetPath)
+	utils.LogInfo("Serving asset: %s", assetPath)
 }

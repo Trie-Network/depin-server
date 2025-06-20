@@ -82,7 +82,7 @@ func HandleFileUpload(c *gin.Context) {
 		return
 	}
 
-	if assetType == constants.ASSET_TYPE_MODEL  {
+	if assetType == constants.ASSET_TYPE_MODEL {
 		modelInfo := &ModelInfo{
 			AssetID:       assetID,
 			AssetName:     assetName,
@@ -113,7 +113,31 @@ func deleteFile(filePath string) error {
 	return nil
 }
 
-func getAssetLocation(assetID string, filename string) string {
+
+// getAssetLocation returns the full path to the asset file based on the asset ID.
+func getAssetLocation(assetID string) string {
+	homeDir := os.Getenv("HOME")
+	if homeDir == "" {
+		return ""
+	}
+
+	assetDirPath := filepath.Join(homeDir, "depin", "rubixgoplatform", "linux", "node0", "NFT", assetID)
+
+	entries, err := os.ReadDir(assetDirPath)
+	if err != nil {
+		return ""
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() && filepath.Ext(entry.Name()) != ".json" {
+			return filepath.Join(assetDirPath, entry.Name())
+		}
+	}
+
+	return ""
+}
+
+func getAssetLocationByFilename(assetID string, filename string) string {
 	homeDir := os.Getenv("HOME")
 
 	// TODO: handle build dir for other OS

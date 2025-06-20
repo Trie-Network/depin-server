@@ -12,8 +12,8 @@ import (
 )
 
 type ModelInfo struct {
-	AssetID   string `json:"assetID"`
-	AssetName string `json:"assetName"`
+	AssetID       string `json:"assetID"`
+	AssetName     string `json:"assetName"`
 	AssetFileName string `json:"assetFilename"`
 }
 
@@ -25,8 +25,8 @@ func runModel(modelInfo *ModelInfo) error {
 	if ext == ".gguf" {
 		utils.LogInfo("Launching Ollama runtime for .gguf model: %s", modelInfo.AssetName)
 		return runModelWithOllama(
-			modelInfo.AssetID, 
-			modelInfo.AssetName, 
+			modelInfo.AssetID,
+			modelInfo.AssetName,
 			modelInfo.AssetFileName)
 	}
 
@@ -40,7 +40,7 @@ func runModelWithOllama(assetID, assetName, filename string) error {
 		return fmt.Errorf("CREATE_OLLAMA_MODEL_SCRIPT is not set")
 	}
 
-	ggufPath := getAssetLocation(assetID, filename)
+	ggufPath := getAssetLocationByFilename(assetID, filename)
 
 	// Step 1: Run create.sh
 	stdout, stderr, err := runCommand(createScriptPath, ggufPath, assetID)

@@ -42,6 +42,7 @@ func main() {
 			apiV1.POST("/upload", handlers.HandleFileUpload)			
 			apiV1.POST("/inference", handlers.HandleInference)
 			apiV1.GET("/assets", handlers.HandleGetAssets)
+			apiV1.GET("/assets/download/:assetId", handlers.HandleDownloadAsset)
 		} else {
 			utils.LogInfo("Depin Server is not accepting new assets, set ENABLE_ASSET_UPLOAD to true to allow uploads")
 		}
