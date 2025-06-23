@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"depin-server/constants"
 	"depin-server/rubix"
 	"depin-server/utils"
 
@@ -34,7 +35,7 @@ func HandleImportModel(c *gin.Context) {
 	}
 
 	// Validate assetType
-	if req.AssetType != "model" && req.AssetType != "dataset" {
+	if req.AssetType != constants.ASSET_TYPE_MODEL && req.AssetType != constants.ASSET_TYPE_DATASET {
 		utils.RespondError(c, http.StatusBadRequest, "Invalid assetType. Must be 'model' or 'dataset'", nil)
 		return
 	}
@@ -82,15 +83,17 @@ func HandleImportModel(c *gin.Context) {
 	}
 
 	// Attempt to run model if supported
-	model := &ModelInfo{
-		AssetID:       assetID,
-		AssetName:     req.AssetName,
-		AssetFileName: filename,
-	}
+	if req.AssetType == constants.ASSET_TYPE_MODEL {
+		model := &ModelInfo{
+			AssetID:       assetID,
+			AssetName:     req.AssetName,
+			AssetFileName: filename,
+		}
 
-	if err := runModel(model); err != nil {
-		utils.RespondError(c, http.StatusInternalServerError, "Runtime launch failed", err)
-		return
+		if err := runModel(model); err != nil {
+			utils.RespondError(c, http.StatusInternalServerError, "Runtime launch failed", err)
+			return
+		}
 	}
 
 	utils.RespondSuccess(c, "Asset imported and launched successfully", gin.H{
