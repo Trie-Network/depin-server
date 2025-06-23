@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"depin-server/constants"
 	"depin-server/rubix"
@@ -20,16 +21,18 @@ func HandleFileUpload(c *gin.Context) {
 		uploadRoot = "uploads"
 	}
 
-	file, header, err := c.Request.FormFile("file")
-	if err != nil {
-		utils.LogInfo("Error reading file: %v", err)
-		utils.RespondError(c, http.StatusBadRequest, "File read error", err)
+	assetName := c.PostForm("assetName")
+	assetType := c.PostForm("assetType")
+	url := strings.TrimSpace(c.PostForm("url"))
+
+	file, header, errFile := c.Request.FormFile("file")
+	if errFile != nil {
+		utils.LogInfo("Error reading file: %v", errFile)
+		utils.RespondError(c, http.StatusBadRequest, "File read error", errFile)
 		return
 	}
 	defer file.Close()
 
-	assetName := c.PostForm("assetName")
-	assetType := c.PostForm("assetType")
 
 	if assetName == "" || assetType == "" {
 		utils.LogInfo("Missing assetName or assetType in request")
@@ -39,9 +42,19 @@ func HandleFileUpload(c *gin.Context) {
 
 	switch assetType {
 	case constants.ASSET_TYPE_DATASET, constants.ASSET_TYPE_MODEL:
+		// valid
 	default:
 		utils.LogInfo("Invalid assetType: %s", assetType)
 		utils.RespondError(c, http.StatusBadRequest, "Invalid assetType. Must be 'model' or 'dataset'", nil)
+		return
+	}
+
+	if file == nil && url == "" {
+		utils.RespondError(c, http.StatusBadRequest, "Provide either a file or a URL", nil)
+		return
+	}
+	if file != nil && url != "" {
+		utils.RespondError(c, http.StatusBadRequest, "Provide only one of file or URL, not both", nil)
 		return
 	}
 
@@ -52,19 +65,44 @@ func HandleFileUpload(c *gin.Context) {
 		return
 	}
 
-	dstPath := filepath.Join(uploadDir, filepath.Base(header.Filename))
-	outFile, err := os.Create(dstPath)
-	if err != nil {
-		utils.LogInfo("Error creating destination file: %v", err)
-		utils.RespondError(c, http.StatusInternalServerError, "File creation error", err)
-		return
-	}
-	defer outFile.Close()
+	var filename string
+	if file != nil {
+		defer file.Close()
+		filename = filepath.Base(header.Filename)
+		dstPath := filepath.Join(uploadDir, filename)
 
-	if _, err := io.Copy(outFile, file); err != nil {
-		utils.LogInfo("Error saving file: %v", err)
-		utils.RespondError(c, http.StatusInternalServerError, "File write error", err)
-		return
+		outFile, err := os.Create(dstPath)
+		if err != nil {
+			utils.LogInfo("Error creating destination file: %v", err)
+			utils.RespondError(c, http.StatusInternalServerError, "File creation error", err)
+			return
+		}
+		defer outFile.Close()
+
+		if _, err := io.Copy(outFile, file); err != nil {
+			utils.LogInfo("Error saving file: %v", err)
+			utils.RespondError(c, http.StatusInternalServerError, "File write error", err)
+			return
+		}
+	} else {
+		if !strings.Contains(url, "huggingface.co") {
+			utils.RespondError(c, http.StatusBadRequest, "URL must be from huggingface.co", nil)
+			return
+		}
+		downloadURL := normalizeHuggingFaceURL(url)
+		parts := strings.Split(downloadURL, "/")
+		filename = parts[len(parts)-1]
+
+		filename = strings.Split(filename, "?")[0]
+		fullPath := filepath.Join(uploadDir, filename)
+		utils.LogInfo("Downloading asset from: %s", downloadURL)
+		
+		stdout, stderr, err := runCommand("wget", "-O", fullPath, downloadURL)
+		if err != nil {
+			utils.LogInfo("wget failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+			utils.RespondError(c, http.StatusInternalServerError, "Failed to download asset", err)
+			return
+		}
 	}
 
 	defer deleteFile(uploadDir)
@@ -86,7 +124,7 @@ func HandleFileUpload(c *gin.Context) {
 		modelInfo := &ModelInfo{
 			AssetID:       assetID,
 			AssetName:     assetName,
-			AssetFileName: header.Filename,
+			AssetFileName: filename,
 		}
 
 		if err := runModel(modelInfo); err != nil {
@@ -96,9 +134,9 @@ func HandleFileUpload(c *gin.Context) {
 		}
 	}
 
-	utils.LogInfo("File uploaded: %s (Asset: %s, Type: %s)", header.Filename, assetName, assetType)
+	utils.LogInfo("File uploaded: %s (Asset: %s, Type: %s)", filename, assetName, assetType)
 	utils.RespondSuccess(c, "Asset uploaded successfully", gin.H{
-		"fileName":  header.Filename,
+		"fileName":  filename,
 		"assetName": assetName,
 		"assetType": assetType,
 		"assetId":   assetID,
@@ -112,7 +150,6 @@ func deleteFile(filePath string) error {
 	}
 	return nil
 }
-
 
 // getAssetLocation returns the full path to the asset file based on the asset ID.
 func getAssetLocation(assetID string) string {
@@ -142,4 +179,12 @@ func getAssetLocationByFilename(assetID string, filename string) string {
 
 	// TODO: handle build dir for other OS
 	return filepath.Join(homeDir, "depin", "rubixgoplatform", "linux", "node0", "NFT", assetID, filename)
+}
+
+func normalizeHuggingFaceURL(original string) string {
+	original = strings.Replace(original, "/blob/", "/resolve/", 1)
+	if !strings.Contains(original, "?download=true") {
+		original += "?download=true"
+	}
+	return original
 }
