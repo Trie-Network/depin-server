@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -23,16 +24,7 @@ func HandleFileUpload(c *gin.Context) {
 
 	assetName := c.PostForm("assetName")
 	assetType := c.PostForm("assetType")
-	url := strings.TrimSpace(c.PostForm("url"))
-
-	file, header, errFile := c.Request.FormFile("file")
-	if errFile != nil {
-		utils.LogInfo("Error reading file: %v", errFile)
-		utils.RespondError(c, http.StatusBadRequest, "File read error", errFile)
-		return
-	}
-	defer file.Close()
-
+	url := c.PostForm("url")
 
 	if assetName == "" || assetType == "" {
 		utils.LogInfo("Missing assetName or assetType in request")
@@ -40,21 +32,41 @@ func HandleFileUpload(c *gin.Context) {
 		return
 	}
 
-	switch assetType {
-	case constants.ASSET_TYPE_DATASET, constants.ASSET_TYPE_MODEL:
-		// valid
-	default:
-		utils.LogInfo("Invalid assetType: %s", assetType)
-		utils.RespondError(c, http.StatusBadRequest, "Invalid assetType. Must be 'model' or 'dataset'", nil)
+	if url == "" && c.Request.MultipartForm == nil {
+		_ = c.Request.ParseMultipartForm(32 << 20) // maxMemory 32MB
+	}
+
+	var file multipart.File
+	var header *multipart.FileHeader
+	var err error
+
+	// Validate source
+	filePresent := false
+	if url == "" {
+		file, header, err = c.Request.FormFile("file")
+		if err != nil {
+			utils.LogInfo("Error reading file: %v", err)
+			utils.RespondError(c, http.StatusBadRequest, "File read error or missing file field", err)
+			return
+		}
+		defer file.Close()
+		filePresent = true
+	}
+
+	if filePresent && url != "" {
+		utils.RespondError(c, http.StatusBadRequest, "Provide only one of file or URL, not both", nil)
+		return
+	}
+	if !filePresent && url == "" {
+		utils.RespondError(c, http.StatusBadRequest, "Either file or url must be provided", nil)
 		return
 	}
 
-	if file == nil && url == "" {
-		utils.RespondError(c, http.StatusBadRequest, "Provide either a file or a URL", nil)
-		return
-	}
-	if file != nil && url != "" {
-		utils.RespondError(c, http.StatusBadRequest, "Provide only one of file or URL, not both", nil)
+	switch assetType {
+	case constants.ASSET_TYPE_DATASET, constants.ASSET_TYPE_MODEL:
+	default:
+		utils.LogInfo("Invalid assetType: %s", assetType)
+		utils.RespondError(c, http.StatusBadRequest, "Invalid assetType. Must be 'model' or 'dataset'", nil)
 		return
 	}
 
@@ -66,8 +78,8 @@ func HandleFileUpload(c *gin.Context) {
 	}
 
 	var filename string
-	if file != nil {
-		defer file.Close()
+
+	if filePresent {
 		filename = filepath.Base(header.Filename)
 		dstPath := filepath.Join(uploadDir, filename)
 
@@ -91,12 +103,10 @@ func HandleFileUpload(c *gin.Context) {
 		}
 		downloadURL := normalizeHuggingFaceURL(url)
 		parts := strings.Split(downloadURL, "/")
-		filename = parts[len(parts)-1]
-
-		filename = strings.Split(filename, "?")[0]
+		filename = strings.Split(parts[len(parts)-1], "?")[0]
 		fullPath := filepath.Join(uploadDir, filename)
+
 		utils.LogInfo("Downloading asset from: %s", downloadURL)
-		
 		stdout, stderr, err := runCommand("wget", "-O", fullPath, downloadURL)
 		if err != nil {
 			utils.LogInfo("wget failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
@@ -104,8 +114,6 @@ func HandleFileUpload(c *gin.Context) {
 			return
 		}
 	}
-
-	defer deleteFile(uploadDir)
 
 	assetID, err := rubix.GenerateAssetHash(assetName, assetType)
 	if err != nil {
@@ -134,8 +142,8 @@ func HandleFileUpload(c *gin.Context) {
 		}
 	}
 
-	utils.LogInfo("File uploaded: %s (Asset: %s, Type: %s)", filename, assetName, assetType)
-	utils.RespondSuccess(c, "Asset uploaded successfully", gin.H{
+	utils.LogInfo("Asset uploaded: %s (Asset: %s, Type: %s)", filename, assetName, assetType)
+	utils.RespondSuccess(c, "Asset uploaded/imported successfully", gin.H{
 		"fileName":  filename,
 		"assetName": assetName,
 		"assetType": assetType,
