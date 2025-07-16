@@ -60,9 +60,8 @@ func NewStorage(dbPath string, threshold int) (*InferenceStorage, error) {
 
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS assets (
-			id TEXT PRIMARY KEY,
-		)
-	`)
+			id TEXT PRIMARY KEY
+		)`)
 	if err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to create inference_record_queue table: %v", err)
