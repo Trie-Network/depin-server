@@ -148,5 +148,10 @@ func GenerateAssetHash(assetName string, assetType string) (string, error) {
 		return "", fmt.Errorf("unable to fetch NFT ID after CreateNFT API call")
 	}
 
+	assetID := basicResponse.Result
+	if err := SubscribeNFT(nodeAddress, assetID); err != nil {
+		return "", fmt.Errorf("Failed to subscribe NFT: %v", err)
+	}
+
 	return basicResponse.Result, nil
 }

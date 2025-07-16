@@ -1,4 +1,4 @@
-package handlers
+package server
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func HandleFileUpload(c *gin.Context) {
+func (s *DepinServer) HandleFileUpload(c *gin.Context) {
 	uploadRoot := os.Getenv("UPLOAD_DIR")
 	if uploadRoot == "" {
 		uploadRoot = "uploads"
