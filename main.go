@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 
 	_ "github.com/joho/godotenv/autoload"
 
@@ -33,7 +34,20 @@ func main() {
 		log.Fatalf("RUBIX_NODE_ADDRESS is not set in .env")
 	}
 
-	storage, err := db.NewStorage(inferenceRecordDBPath, 10)
+	assetStoreInfoThreshold := os.Getenv("ASSET_STORE_INFO_THRESHOLD")
+	if assetStoreInfoThreshold == "" {
+		assetStoreInfoThreshold = "10"
+	}
+
+	threshold, err := strconv.Atoi(assetStoreInfoThreshold)
+	if err != nil {
+		log.Fatalf("Invalid ASSET_STORE_INFO_THRESHOLD: %v", err)
+	}
+	if threshold <= 0 {
+		log.Fatalf("ASSET_STORE_INFO_THRESHOLD must be a positive integer")
+	}
+
+	storage, err := db.NewStorage(inferenceRecordDBPath, threshold)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
@@ -59,7 +73,6 @@ func main() {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
-
 
 // resubscribeAssets is meant for subscribing back the Assets in case of
 // DePIN server or Rubix Node restart
