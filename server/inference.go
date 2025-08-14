@@ -141,14 +141,12 @@ func getUserInferenceInput(inferenceInput *InferenceInput) (string, error) {
 		return "", errors.New("inferenceInput is required")
 	}
 
-	// TODO: need to expected only 1 message with role "user"?
-	if len(inferenceInput.Messages) != 3 {
-		return "", fmt.Errorf("exactly three messages are expected, got %d", len(inferenceInput.Messages))
+	if len(inferenceInput.Messages) < 1 {
+		return "", fmt.Errorf("atleast one message is expected, got %d", len(inferenceInput.Messages))
 	}
 
-	if inferenceInput.Messages[2].Role != "user" {
-		return "", fmt.Errorf("the third message must be from the user, got %s", inferenceInput.Messages[2].Role)
-	}
+	// User query will be the content of the last message always
+	idx := len(inferenceInput.Messages) - 1
 
-	return inferenceInput.Messages[2].Content, nil
+	return inferenceInput.Messages[idx].Content, nil
 }
