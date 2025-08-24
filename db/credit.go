@@ -58,7 +58,7 @@ func ProcessBatchInferenceRecords(s *InferenceStorage, assetID string, rubixNode
 	var ids []string
 	for rows.Next() {
 		var r InferenceRecord
-		if err := rows.Scan(&r.ID, &r.Did, &r.Timestamp, &r.Signature, &r.AssetID, &r.AssetValue); err != nil {
+		if err := rows.Scan(&r.ID, &r.Did, &r.Timestamp, &r.Signature, &r.AssetID, &r.AssetValue, &r.Query); err != nil {
 			log.Printf("Error scanning record: %v", err)
 			return
 		}
