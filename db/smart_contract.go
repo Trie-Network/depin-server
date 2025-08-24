@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -46,12 +47,9 @@ func prepareSmartContractData(inferenceRecords []InferenceRecord, depinDID strin
 	}
 
 	// 0th index is the asseumption that all records have the same asset_id
-	info := "Inference records for asset ID: " + inferenceRecords[0].AssetID + " at " + currTimestamp
-
 	var inferenceInfo *InferenceInfo = &InferenceInfo{
 		Timestamp: currTimestamp,
 		Records:   inferenceRecords,
-		Info:      info,
 	}
 
 	inferenceInfoBytes, err := json.Marshal(inferenceInfo)
@@ -59,10 +57,14 @@ func prepareSmartContractData(inferenceRecords []InferenceRecord, depinDID strin
 		return "", fmt.Errorf("failed to marshal inference info: %v", err)
 	}
 
+	inferenceHeader := "model used for inference by " + inferenceRecords[0].Did
+
+	inferenceStr := strings.Join([]string{inferenceHeader, string(inferenceInfoBytes)}, " | ")
+
 	contractMsg := map[string]*SmartContractFuncInput{
 		"store_inference": {
 			AssetID:       inferenceRecords[0].AssetID,
-			InferenceInfo: string(inferenceInfoBytes),
+			InferenceInfo: inferenceStr,
 			AssetValue:    inferenceRecords[0].AssetValue,
 			DepinDID:      depinDID,
 		},
