@@ -16,7 +16,7 @@ func AddInferenceRecord(s *InferenceStorage, r *InferenceRecord, rubixNodeAddres
 	}
 
 	_, err = tx.Exec(
-		"INSERT INTO inference_record_queue (id, did, timestamp, signature, asset_id, asset_value, inference_query) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO inference_record_queue (id, did, timestamp, signature, asset_id, asset_value, inference_query) VALUES (?, ?, ?, ?, ?, ?, ?)",
 		r.ID, r.Did, r.Timestamp, r.Signature, r.AssetID, r.AssetValue, r.Query,
 	)
 	if err != nil {
