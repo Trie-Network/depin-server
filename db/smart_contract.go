@@ -104,7 +104,12 @@ func ExecuteSmartContract(inferenceRecords []InferenceRecord, rubixNodeAddress s
 		return fmt.Errorf("failed to marshal execute contract request: %v", err)
 	}
 
-	resp, err := http.Post(rubixNodeAddress, "application/json", bytes.NewBuffer(executeContractReqBytes))
+	smartContractExecuteAPIURL, err := url.JoinPath(rubixNodeAddress, "/api/execute-smart-contract")
+	if err != nil {
+		return fmt.Errorf("failed to join URL path: %v", err)
+	}
+
+	resp, err := http.Post(smartContractExecuteAPIURL, "application/json", bytes.NewBuffer(executeContractReqBytes))
 	if err != nil {
 		return fmt.Errorf("error forwarding request to Rubix node: %v", err)
 	}
