@@ -36,7 +36,7 @@ type InferenceInfo struct {
 type SmartContractFuncInput struct {
 	AssetID       string `json:"asset_id"`
 	InferenceInfo string `json:"inference_info"`
-	AssetValue    string `json:"asset_value"`
+	AssetValue    float64 `json:"asset_value"`
 	DepinDID      string `json:"depin_did"`
 }
 
@@ -60,12 +60,17 @@ func prepareSmartContractData(inferenceRecords []InferenceRecord, depinDID strin
 	inferenceHeader := "model used for inference by " + inferenceRecords[0].Did
 
 	inferenceStr := strings.Join([]string{inferenceHeader, string(inferenceInfoBytes)}, " | ")
+	
+	assetValue, err := strconv.ParseFloat(inferenceRecords[0].AssetValue, 64)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse asset value: %v", err)
+	}
 
 	contractMsg := map[string]*SmartContractFuncInput{
 		"store_inference": {
 			AssetID:       inferenceRecords[0].AssetID,
 			InferenceInfo: inferenceStr,
-			AssetValue:    inferenceRecords[0].AssetValue,
+			AssetValue:    assetValue,
 			DepinDID:      depinDID,
 		},
 	}

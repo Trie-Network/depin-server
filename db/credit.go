@@ -47,7 +47,7 @@ func ProcessBatchInferenceRecords(s *InferenceStorage, assetID string, rubixNode
 	defer s.mu.Unlock()
 
 	// Fetch records ordered by timestamp (oldest first)
-	rows, err := s.db.Query("SELECT id, did, timestamp, signature, asset_id, asset_value FROM inference_record_queue WHERE asset_id = ? ORDER BY timestamp ASC LIMIT ?", assetID, s.threshold)
+	rows, err := s.db.Query("SELECT id, did, timestamp, signature, asset_id, asset_value, inference_query FROM inference_record_queue WHERE asset_id = ? ORDER BY timestamp ASC", assetID)
 	if err != nil {
 		log.Printf("Error querying records: %v", err)
 		return
