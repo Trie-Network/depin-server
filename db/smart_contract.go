@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -35,7 +36,7 @@ type InferenceInfo struct {
 type SmartContractFuncInput struct {
 	AssetID       string `json:"asset_id"`
 	InferenceInfo string `json:"inference_info"`
-	AssetValue    string `json:"asset_value"`
+	AssetValue    float64 `json:"asset_value"`
 	DepinDID      string `json:"depin_did"`
 }
 
@@ -46,12 +47,9 @@ func prepareSmartContractData(inferenceRecords []InferenceRecord, depinDID strin
 	}
 
 	// 0th index is the asseumption that all records have the same asset_id
-	info := "Inference records for asset ID: " + inferenceRecords[0].AssetID + " at " + currTimestamp
-
 	var inferenceInfo *InferenceInfo = &InferenceInfo{
 		Timestamp: currTimestamp,
 		Records:   inferenceRecords,
-		Info:      info,
 	}
 
 	inferenceInfoBytes, err := json.Marshal(inferenceInfo)
@@ -59,11 +57,20 @@ func prepareSmartContractData(inferenceRecords []InferenceRecord, depinDID strin
 		return "", fmt.Errorf("failed to marshal inference info: %v", err)
 	}
 
+	inferenceHeader := "model used for inference by " + inferenceRecords[0].Did
+
+	inferenceStr := strings.Join([]string{inferenceHeader, string(inferenceInfoBytes)}, " | ")
+	
+	assetValue, err := strconv.ParseFloat(inferenceRecords[0].AssetValue, 64)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse asset value: %v", err)
+	}
+
 	contractMsg := map[string]*SmartContractFuncInput{
 		"store_inference": {
 			AssetID:       inferenceRecords[0].AssetID,
-			InferenceInfo: string(inferenceInfoBytes),
-			AssetValue:    inferenceRecords[0].AssetValue,
+			InferenceInfo: inferenceStr,
+			AssetValue:    assetValue,
 			DepinDID:      depinDID,
 		},
 	}
@@ -102,7 +109,12 @@ func ExecuteSmartContract(inferenceRecords []InferenceRecord, rubixNodeAddress s
 		return fmt.Errorf("failed to marshal execute contract request: %v", err)
 	}
 
-	resp, err := http.Post(rubixNodeAddress, "application/json", bytes.NewBuffer(executeContractReqBytes))
+	smartContractExecuteAPIURL, err := url.JoinPath(rubixNodeAddress, "/api/execute-smart-contract")
+	if err != nil {
+		return fmt.Errorf("failed to join URL path: %v", err)
+	}
+
+	resp, err := http.Post(smartContractExecuteAPIURL, "application/json", bytes.NewBuffer(executeContractReqBytes))
 	if err != nil {
 		return fmt.Errorf("error forwarding request to Rubix node: %v", err)
 	}

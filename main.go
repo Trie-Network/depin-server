@@ -27,11 +27,13 @@ func main() {
 	inferenceStorageContractAddress := os.Getenv("INFERENCE_STORAGE_CONTRACT_ADDRESS")
 	if inferenceStorageContractAddress == "" {
 		log.Fatalf("INFERENCE_STORAGE_CONTRACT_ADDRESS is not set in .env")
+		return
 	}
 
 	rubixNodeAddress := os.Getenv("RUBIX_NODE_ADDRESS")
 	if rubixNodeAddress == "" {
 		log.Fatalf("RUBIX_NODE_ADDRESS is not set in .env")
+		return
 	}
 
 	assetStoreInfoThreshold := os.Getenv("ASSET_STORE_INFO_THRESHOLD")
@@ -42,14 +44,23 @@ func main() {
 	threshold, err := strconv.Atoi(assetStoreInfoThreshold)
 	if err != nil {
 		log.Fatalf("Invalid ASSET_STORE_INFO_THRESHOLD: %v", err)
+		return
 	}
 	if threshold <= 0 {
 		log.Fatalf("ASSET_STORE_INFO_THRESHOLD must be a positive integer")
+		return
+	}
+
+	rubixNFTPath := os.Getenv("RUBIX_NFT_PATH")
+	if rubixNFTPath == "" {
+		log.Fatal("RUBIX_NFT_PATH is not set")
+		return
 	}
 
 	storage, err := db.NewStorage(inferenceRecordDBPath, threshold)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
+		return
 	}
 
 	logFilePath := os.Getenv("LOG_FILE")
@@ -71,6 +82,7 @@ func main() {
 	depinServer := server.NewDepinServer(depinServerPort, storage, rubixNodeAddress)
 	if err := depinServer.Start(); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
+		return
 	}
 }
 

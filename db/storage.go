@@ -19,7 +19,7 @@ type InferenceRecord struct {
 	Did       string `json:"did"`
 	Timestamp string `json:"timestamp"`
 	Signature string `json:"signature"`
-	Query     string `json:"query"`
+	Query     string `json:"inference_query"`
 	AssetID   string `json:"asset_id"`
 	AssetValue string `json:"asset_value"`	
 }
@@ -50,7 +50,8 @@ func NewStorage(dbPath string, threshold int) (*InferenceStorage, error) {
 			timestamp TEXT NOT NULL,
 			signature TEXT NOT NULL,
 			asset_id TEXT NOT NULL,
-			asset_value TEXT NOT NULL
+			asset_value TEXT NOT NULL,
+			inference_query TEXT
 		)
 	`)
 	if err != nil {
