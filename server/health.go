@@ -1,4 +1,4 @@
-package handlers
+package server
 
 import (
 	"depin-server/utils"
@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func HandleHealthCheck(c *gin.Context) {
+func (s *DepinServer) HandleHealthCheck(c *gin.Context) {
 	status := "NOOP"
 	if os.Getenv("ENABLE_ASSET_UPLOAD") == "true" {
 		status = "OK"

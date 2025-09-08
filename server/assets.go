@@ -1,4 +1,4 @@
-package handlers
+package server
 
 import (
 	"encoding/json"
@@ -19,7 +19,7 @@ type AssetMetadata struct {
 	Datasets []AssetEntry `json:"datasets"`
 }
 
-func HandleGetAssets(c *gin.Context) {
+func (s *DepinServer) HandleGetAssets(c *gin.Context) {
 	const assetFile = "config/assets.json"
 
 	data, err := os.ReadFile(assetFile)
@@ -44,7 +44,7 @@ func HandleGetAssets(c *gin.Context) {
 	utils.RespondSuccess(c, "Assets fetched successfully", metadata)
 }
 
-func HandleDownloadAsset(c *gin.Context) {
+func (s *DepinServer) HandleDownloadAsset(c *gin.Context) {
 	assetID := c.Param("assetId")
 	if assetID == "" {
 		utils.RespondError(c, 400, "Asset ID is required", nil)
