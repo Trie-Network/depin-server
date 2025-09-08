@@ -161,12 +161,8 @@ func deleteFile(filePath string) error {
 
 // getAssetLocation returns the full path to the asset file based on the asset ID.
 func getAssetLocation(assetID string) string {
-	homeDir := os.Getenv("HOME")
-	if homeDir == "" {
-		return ""
-	}
-
-	assetDirPath := filepath.Join(homeDir, "depin", "rubixgoplatform", "linux", "node0", "NFT", assetID)
+	rubixNFTPath := os.Getenv("RUBIX_NFT_PATH")
+	assetDirPath := filepath.Join(rubixNFTPath, assetID)
 
 	entries, err := os.ReadDir(assetDirPath)
 	if err != nil {
@@ -183,10 +179,10 @@ func getAssetLocation(assetID string) string {
 }
 
 func getAssetLocationByFilename(assetID string, filename string) string {
-	homeDir := os.Getenv("HOME")
+	rubixNFTPath := os.Getenv("RUBIX_NFT_PATH") // Path til NFT directory of rubix config dir
 
 	// TODO: handle build dir for other OS
-	return filepath.Join(homeDir, "depin", "rubixgoplatform", "linux", "node0", "NFT", assetID, filename)
+	return filepath.Join(rubixNFTPath, assetID, filename)
 }
 
 func normalizeHuggingFaceURL(original string) string {
