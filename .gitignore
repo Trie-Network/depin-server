@@ -1,0 +1,9 @@
+.env
+
+uploads/
+artifacts/
+config/
+models/
+
+*.log
+*.db
