@@ -19,6 +19,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Initialize DB
+	dbConn := server.InitDB("assets.db")
+
 	inferenceRecordDBPath := os.Getenv("INFERENCE_RECORD_DB_PATH")
 	if inferenceRecordDBPath == "" {
 		inferenceRecordDBPath = "inference_record.db"
@@ -27,13 +30,11 @@ func main() {
 	inferenceStorageContractAddress := os.Getenv("INFERENCE_STORAGE_CONTRACT_ADDRESS")
 	if inferenceStorageContractAddress == "" {
 		log.Fatalf("INFERENCE_STORAGE_CONTRACT_ADDRESS is not set in .env")
-		return
 	}
 
 	rubixNodeAddress := os.Getenv("RUBIX_NODE_ADDRESS")
 	if rubixNodeAddress == "" {
 		log.Fatalf("RUBIX_NODE_ADDRESS is not set in .env")
-		return
 	}
 
 	assetStoreInfoThreshold := os.Getenv("ASSET_STORE_INFO_THRESHOLD")
@@ -42,52 +43,32 @@ func main() {
 	}
 
 	threshold, err := strconv.Atoi(assetStoreInfoThreshold)
-	if err != nil {
+	if err != nil || threshold <= 0 {
 		log.Fatalf("Invalid ASSET_STORE_INFO_THRESHOLD: %v", err)
-		return
-	}
-	if threshold <= 0 {
-		log.Fatalf("ASSET_STORE_INFO_THRESHOLD must be a positive integer")
-		return
-	}
-
-	rubixNFTPath := os.Getenv("RUBIX_NFT_PATH")
-	if rubixNFTPath == "" {
-		log.Fatal("RUBIX_NFT_PATH is not set")
-		return
 	}
 
 	storage, err := db.NewStorage(inferenceRecordDBPath, threshold)
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
-		return
+		log.Fatalf("Failed to initialize inference storage: %v", err)
 	}
 
-	logFilePath := os.Getenv("LOG_FILE")
 	depinServerPort := os.Getenv("SERVER_PORT")
 	if depinServerPort == "" {
 		depinServerPort = "8080"
 	}
 
-	logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		panic(err)
-	}
-	log.SetOutput(logFile)
-	os.Stdout = logFile
-	os.Stderr = logFile
+	// Create DepinServer instance
+	depinServer := server.NewDepinServer(depinServerPort, storage, rubixNodeAddress, dbConn)
 
+	// Resubscribe assets in background
 	go resubscribeAssets(storage, rubixNodeAddress)
 
-	depinServer := server.NewDepinServer(depinServerPort, storage, rubixNodeAddress)
+	log.Println("Server started at :" + depinServerPort)
 	if err := depinServer.Start(); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
-		return
 	}
 }
 
-// resubscribeAssets is meant for subscribing back the Assets in case of
-// DePIN server or Rubix Node restart
 func resubscribeAssets(s *db.InferenceStorage, nodeAddress string) {
 	assetList, err := db.GetExistingAssets(s)
 	if err != nil {
@@ -96,8 +77,7 @@ func resubscribeAssets(s *db.InferenceStorage, nodeAddress string) {
 	}
 
 	for _, assetID := range assetList {
-		err := rubix.SubscribeNFT(nodeAddress, assetID)
-		if err != nil {
+		if err := rubix.SubscribeNFT(nodeAddress, assetID); err != nil {
 			log.Printf("failed to subscribe to Asset: %v, err: %v\n", assetID, err)
 		}
 	}
