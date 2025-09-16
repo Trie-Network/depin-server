@@ -5,17 +5,17 @@ import (
 	"depin-server/utils"
 	"log"
 	"os"
-
+	"database/sql"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/gin-gonic/gin"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
+	
 )
 
 type DepinServer struct {
 	Port             string
 	Storage          *db.InferenceStorage
 	RubixNodeAddress string
-	DB               *gorm.DB
+	DB               *sql.DB
 	router           *gin.Engine
 }
 
@@ -32,18 +32,34 @@ type Asset struct {
 }
 
 // InitDB initializes SQLite and returns *gorm.DB
-func InitDB(dbPath string) *gorm.DB {
-	dbConn, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+func InitDB(dbPath string) *sql.DB {
+	dbConn, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		log.Fatal("Failed to connect to SQLite DB:", err)
+		log.Fatal("Failed to open DB:", err)
 	}
-	if err := dbConn.AutoMigrate(&Asset{}); err != nil {
-		log.Fatal("Failed to migrate Asset schema:", err)
+
+	createTableSQL := `
+	CREATE TABLE IF NOT EXISTS assets (
+		id TEXT PRIMARY KEY,
+		name TEXT,
+		main_category TEXT,
+		secondary_category TEXT,
+		description TEXT,
+		depin_provider_did TEXT,
+		metrics TEXT,
+		category TEXT,
+		owner TEXT
+	);
+	`
+	if _, err := dbConn.Exec(createTableSQL); err != nil {
+		log.Fatal("Failed to create assets table:", err)
 	}
+
 	return dbConn
 }
 
-func NewDepinServer(port string, storage *db.InferenceStorage, rubixNodeAddress string, dbConn *gorm.DB) *DepinServer {
+
+func NewDepinServer(port string, storage *db.InferenceStorage, rubixNodeAddress string, dbConn *sql.DB) *DepinServer {
 	s := &DepinServer{
 		Port:             port,
 		Storage:          storage,
@@ -52,7 +68,11 @@ func NewDepinServer(port string, storage *db.InferenceStorage, rubixNodeAddress 
 		router:           gin.Default(),
 	}
 	s.registerRoutes()
-	return s
+	return s 
+}
+
+func (s *DepinServer) Start() error {
+	return s.router.Run(":" + s.Port)
 }
 
 func (s *DepinServer) registerRoutes() {
@@ -77,6 +97,3 @@ func (s *DepinServer) registerRoutes() {
 	}
 }
 
-func (s *DepinServer) Start() error {
-	return s.router.Run(":" + s.Port)
-}
