@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"encoding/json"
 	"depin-server/constants"
 	"github.com/gin-gonic/gin"
 )
@@ -12,25 +13,34 @@ func (s *DepinServer) CreateAsset(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	if asset.ID == "" || asset.Category == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID and Category are required"})
+	metricsJSON, err := json.Marshal(asset.Metrics)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid metrics"})
 		return
 	}
+	metricsStr := string(metricsJSON)
 
-	insertSQL := `
-	INSERT INTO assets (
-		id, name, main_category, secondary_category, description, depin_provider_did, metrics, category, owner
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+	query := `
+		INSERT INTO assets (id, name, main_category, secondary_category, description, metrics, category, owner)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`
-	_, err := s.DB.Exec(insertSQL, asset.ID, asset.Name, asset.MainCategory, asset.SecondaryCategory,
-		asset.Description, asset.DepinProviderDID, asset.Metrics, asset.Category, asset.Owner)
+	_, err = s.DB.Exec(query,
+		asset.ID,
+		asset.Name,
+		asset.MainCategory,
+		asset.SecondaryCategory,
+		asset.Description,
+		metricsStr,     
+		asset.Category, 
+		asset.Owner,
+	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, asset)
+	asset.Metrics = metricsStr
+	c.JSON(http.StatusOK, gin.H{"status": "success", "asset": asset})
 }
 
 func (s *DepinServer) GetAssetsByCategory(c *gin.Context) {
@@ -40,7 +50,10 @@ func (s *DepinServer) GetAssetsByCategory(c *gin.Context) {
 		return
 	}
 
-	rows, err := s.DB.Query("SELECT * FROM assets WHERE category = ?", category)
+	    rows, err := s.DB.Query(`
+        SELECT id, name, main_category, secondary_category, description, metrics, category, owner 
+        FROM assets 
+        WHERE category = ?`, category)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -50,16 +63,26 @@ func (s *DepinServer) GetAssetsByCategory(c *gin.Context) {
 	var assets []Asset
 	for rows.Next() {
 		var a Asset
-		if err := rows.Scan(&a.ID, &a.Name, &a.MainCategory, &a.SecondaryCategory, &a.Description,
-			&a.DepinProviderDID, &a.Metrics, &a.Category, &a.Owner); err != nil {
+		var metricsStr string
+		if err := rows.Scan(
+			&a.ID,
+			&a.Name,
+			&a.MainCategory,
+			&a.SecondaryCategory,
+			&a.Description,
+			&metricsStr,
+			&a.Category,
+			&a.Owner,
+		); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		a.Metrics = json.RawMessage(metricsStr)
 		assets = append(assets, a)
 	}
-
 	c.JSON(http.StatusOK, assets)
 }
+
 
 func (s *DepinServer) GetAssetByID(c *gin.Context) {
 	id := c.Param("id")
@@ -67,7 +90,7 @@ func (s *DepinServer) GetAssetByID(c *gin.Context) {
 
 	var a Asset
 	err := row.Scan(&a.ID, &a.Name, &a.MainCategory, &a.SecondaryCategory, &a.Description,
-		&a.DepinProviderDID, &a.Metrics, &a.Category, &a.Owner)
+		&a.Metrics, &a.Category, &a.Owner)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Asset not found"})
 		return
@@ -89,7 +112,7 @@ func (s *DepinServer) GetAssetByDID(c *gin.Context) {
 	for rows.Next() {
 		var a Asset
 		if err := rows.Scan(&a.ID, &a.Name, &a.MainCategory, &a.SecondaryCategory, &a.Description,
-			&a.DepinProviderDID, &a.Metrics, &a.Category, &a.Owner); err != nil {
+			&a.Metrics, &a.Category, &a.Owner); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
@@ -99,6 +122,56 @@ func (s *DepinServer) GetAssetByDID(c *gin.Context) {
 	if len(assets) == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "No assets found for given DID"})
 		return
+	}
+
+	c.JSON(http.StatusOK, assets)
+}
+
+func (s *DepinServer) GetAllAssets(c *gin.Context) {
+	rows, err := s.DB.Query("SELECT * FROM assets")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	var assets []Asset
+	for rows.Next() {
+		var a Asset
+		if err := rows.Scan(
+			&a.ID, &a.Name, &a.MainCategory, &a.SecondaryCategory,
+			&a.Description, &a.Metrics, &a.Category, &a.Owner,
+		); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		assets = append(assets, a)
+	}
+
+	c.JSON(http.StatusOK, assets)
+}
+
+func (s *DepinServer) GetAssetsByOwnerDID(c *gin.Context) {
+	ownerDID := c.Param("did")
+
+	rows, err := s.DB.Query("SELECT * FROM assets WHERE owner = ?", ownerDID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	var assets []Asset
+	for rows.Next() {
+		var a Asset
+		if err := rows.Scan(
+			&a.ID, &a.Name, &a.MainCategory, &a.SecondaryCategory,
+			&a.Description, &a.Metrics, &a.Category, &a.Owner,
+		); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		assets = append(assets, a)
 	}
 
 	c.JSON(http.StatusOK, assets)

@@ -1,14 +1,13 @@
 package server
 
 import (
+	"database/sql"
 	"depin-server/db"
 	"depin-server/utils"
 	"log"
 	"os"
-	"database/sql"
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/gin-gonic/gin"
-	
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type DepinServer struct {
@@ -20,15 +19,14 @@ type DepinServer struct {
 }
 
 type Asset struct {
-	ID                string `gorm:"column:id;primaryKey" json:"id"`
-	Name              string `gorm:"column:name" json:"name"`
-	MainCategory      string `gorm:"column:main_category" json:"main_category"`
-	SecondaryCategory string `gorm:"column:secondary_category" json:"secondary_category"`
-	Description       string `gorm:"column:description" json:"description"`
-	DepinProviderDID  string `gorm:"column:depin_provider_did" json:"depin_provider_did"`
-	Metrics           string `gorm:"column:metrics" json:"metrics"`
-	Category          string `gorm:"column:category" json:"category"`
-	Owner             string `gorm:"column:owner" json:"owner"`
+	ID                string `json:"id"`
+	Name              string `json:"name"`
+	MainCategory      string `json:"main_category"`
+	SecondaryCategory string `json:"secondary_category"`
+	Description       string `json:"description"`
+	Metrics           interface{} `json:"metrics"`
+	Category          string `json:"category"`
+	Owner             string `json:"owner"`
 }
 
 // InitDB initializes SQLite and returns *gorm.DB
@@ -40,24 +38,22 @@ func InitDB(dbPath string) *sql.DB {
 
 	createTableSQL := `
 	CREATE TABLE IF NOT EXISTS assets (
-		id TEXT PRIMARY KEY,
-		name TEXT,
-		main_category TEXT,
-		secondary_category TEXT,
-		description TEXT,
-		depin_provider_did TEXT,
-		metrics TEXT,
-		category TEXT,
-		owner TEXT
-	);
-	`
+    id TEXT PRIMARY KEY,
+    name TEXT,
+    main_category TEXT,
+    secondary_category TEXT,
+    description TEXT,
+    metrics TEXT,
+    category TEXT,
+    owner TEXT
+	);`
+
 	if _, err := dbConn.Exec(createTableSQL); err != nil {
 		log.Fatal("Failed to create assets table:", err)
 	}
 
 	return dbConn
 }
-
 
 func NewDepinServer(port string, storage *db.InferenceStorage, rubixNodeAddress string, dbConn *sql.DB) *DepinServer {
 	s := &DepinServer{
@@ -68,7 +64,7 @@ func NewDepinServer(port string, storage *db.InferenceStorage, rubixNodeAddress 
 		router:           gin.Default(),
 	}
 	s.registerRoutes()
-	return s 
+	return s
 }
 
 func (s *DepinServer) Start() error {
@@ -90,10 +86,11 @@ func (s *DepinServer) registerRoutes() {
 			apiV1.POST("/assets/create", s.CreateAsset)
 			apiV1.GET("/assets/category", s.GetAssetsByCategory)
 			apiV1.GET("/assets/:id", s.GetAssetByID)
-			apiV1.GET("/assets/did/:did", s.GetAssetByDID)
+			apiV1.GET("/assets/all-assets", s.GetAllAssets)
+			apiV1.GET("/assets/owner/:did", s.GetAssetsByOwnerDID)
+
 		} else {
 			utils.LogInfo("Depin Server is not accepting new assets, set ENABLE_ASSET_UPLOAD to true to allow uploads")
 		}
 	}
 }
-
