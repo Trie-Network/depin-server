@@ -3,11 +3,12 @@ package server
 import (
 	"fmt"
 	"io"
-	"mime/multipart"
+	//"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"database/sql"
 
 	"depin-server/constants"
 	"depin-server/rubix"
@@ -33,41 +34,11 @@ func (s *DepinServer) HandleFileUpload(c *gin.Context) {
 	}
 
 	if url == "" && c.Request.MultipartForm == nil {
-		_ = c.Request.ParseMultipartForm(32 << 20) // maxMemory 32MB
-	}
-
-	var file multipart.File
-	var header *multipart.FileHeader
-	var err error
-
-	// Validate source
-	filePresent := false
-	if url == "" {
-		file, header, err = c.Request.FormFile("file")
-		if err != nil {
-			utils.LogInfo("Error reading file: %v", err)
-			utils.RespondError(c, http.StatusBadRequest, "File read error or missing file field", err)
+		if err := c.Request.ParseMultipartForm(64 << 20); err != nil { // 64MB buffer for 2 files
+			utils.LogInfo("Error parsing multipart form: %v", err)
+			utils.RespondError(c, http.StatusBadRequest, "Invalid form data", err)
 			return
 		}
-		defer file.Close()
-		filePresent = true
-	}
-
-	if filePresent && url != "" {
-		utils.RespondError(c, http.StatusBadRequest, "Provide only one of file or URL, not both", nil)
-		return
-	}
-	if !filePresent && url == "" {
-		utils.RespondError(c, http.StatusBadRequest, "Either file or url must be provided", nil)
-		return
-	}
-
-	switch assetType {
-	case constants.ASSET_TYPE_DATASET, constants.ASSET_TYPE_MODEL:
-	default:
-		utils.LogInfo("Invalid assetType: %s", assetType)
-		utils.RespondError(c, http.StatusBadRequest, "Invalid assetType. Must be 'model' or 'dataset'", nil)
-		return
 	}
 
 	uploadDir := filepath.Join(uploadRoot, assetType+"s", assetName)
@@ -77,33 +48,68 @@ func (s *DepinServer) HandleFileUpload(c *gin.Context) {
 		return
 	}
 
-	var filename string
+	var filenames []string
+	filePresent := false
 
-	if filePresent {
-		filename = filepath.Base(header.Filename)
-		dstPath := filepath.Join(uploadDir, filename)
+	if url == "" {
+		// Handle multiple files
+		form := c.Request.MultipartForm
+		files := form.File["file"]
 
-		outFile, err := os.Create(dstPath)
-		if err != nil {
-			utils.LogInfo("Error creating destination file: %v", err)
-			utils.RespondError(c, http.StatusInternalServerError, "File creation error", err)
+		if len(files) != 2 {
+			utils.RespondError(c, http.StatusBadRequest, "Exactly 2 files must be uploaded", nil)
 			return
 		}
-		defer outFile.Close()
 
-		if _, err := io.Copy(outFile, file); err != nil {
-			utils.LogInfo("Error saving file: %v", err)
-			utils.RespondError(c, http.StatusInternalServerError, "File write error", err)
-			return
+		filePresent = true
+		for _, header := range files {
+			file, err := header.Open()
+			if err != nil {
+				utils.LogInfo("Error opening file: %v", err)
+				utils.RespondError(c, http.StatusInternalServerError, "Failed to open file", err)
+				return
+			}
+			defer file.Close()
+
+			filename := filepath.Base(header.Filename)
+			dstPath := filepath.Join(uploadDir, filename)
+
+			outFile, err := os.Create(dstPath)
+			if err != nil {
+				utils.LogInfo("Error creating destination file: %v", err)
+				utils.RespondError(c, http.StatusInternalServerError, "File creation error", err)
+				return
+			}
+			defer outFile.Close()
+
+			if _, err := io.Copy(outFile, file); err != nil {
+				utils.LogInfo("Error saving file: %v", err)
+				utils.RespondError(c, http.StatusInternalServerError, "File write error", err)
+				return
+			}
+			filenames = append(filenames, filename)
 		}
-	} else {
+	}
+
+	if filePresent && url != "" {
+		utils.RespondError(c, http.StatusBadRequest, "Provide either 2 files or a URL, not both", nil)
+		return
+	}
+
+	if !filePresent && url == "" {
+		utils.RespondError(c, http.StatusBadRequest, "Either 2 files or a URL must be provided", nil)
+		return
+	}
+
+	if url != "" {
 		if !strings.Contains(url, "huggingface.co") {
 			utils.RespondError(c, http.StatusBadRequest, "URL must be from huggingface.co", nil)
 			return
 		}
+
 		downloadURL := normalizeHuggingFaceURL(url)
 		parts := strings.Split(downloadURL, "/")
-		filename = strings.Split(parts[len(parts)-1], "?")[0]
+		filename := strings.Split(parts[len(parts)-1], "?")[0]
 		fullPath := filepath.Join(uploadDir, filename)
 
 		utils.LogInfo("Downloading asset from: %s", downloadURL)
@@ -113,8 +119,19 @@ func (s *DepinServer) HandleFileUpload(c *gin.Context) {
 			utils.RespondError(c, http.StatusInternalServerError, "Failed to download asset", err)
 			return
 		}
+		filenames = append(filenames, filename)
 	}
 
+	// Validate assetType
+	switch assetType {
+	case constants.ASSET_TYPE_DATASET, constants.ASSET_TYPE_MODEL:
+	default:
+		utils.LogInfo("Invalid assetType: %s", assetType)
+		utils.RespondError(c, http.StatusBadRequest, "Invalid assetType. Must be 'model' or 'dataset'", nil)
+		return
+	}
+
+	// Generate asset ID
 	assetID, err := rubix.GenerateAssetHash(assetName, assetType)
 	if err != nil {
 		utils.LogInfo("Error generating asset hash: %v", err)
@@ -128,11 +145,12 @@ func (s *DepinServer) HandleFileUpload(c *gin.Context) {
 		return
 	}
 
-	if assetType == constants.ASSET_TYPE_MODEL {
+	// Run model logic for MODEL assets
+	if assetType == constants.ASSET_TYPE_MODEL && len(filenames) > 0 {
 		modelInfo := &ModelInfo{
 			AssetID:       assetID,
 			AssetName:     assetName,
-			AssetFileName: filename,
+			AssetFileName: filenames[0], // first file
 		}
 
 		if err := runModel(modelInfo); err != nil {
@@ -142,9 +160,9 @@ func (s *DepinServer) HandleFileUpload(c *gin.Context) {
 		}
 	}
 
-	utils.LogInfo("Asset uploaded: %s (Asset: %s, Type: %s)", filename, assetName, assetType)
-	utils.RespondSuccess(c, "Asset uploaded/imported successfully", gin.H{
-		"fileName":  filename,
+	utils.LogInfo("Assets uploaded: %v (Asset: %s, Type: %s)", filenames, assetName, assetType)
+	utils.RespondSuccess(c, "Assets uploaded/imported successfully", gin.H{
+		"fileNames": filenames,
 		"assetName": assetName,
 		"assetType": assetType,
 		"assetId":   assetID,
@@ -179,9 +197,8 @@ func getAssetLocation(assetID string) string {
 }
 
 func getAssetLocationByFilename(assetID string, filename string) string {
-	rubixNFTPath := os.Getenv("RUBIX_NFT_PATH") // Path til NFT directory of rubix config dir
+	rubixNFTPath := os.Getenv("RUBIX_NFT_PATH") 
 
-	// TODO: handle build dir for other OS
 	return filepath.Join(rubixNFTPath, assetID, filename)
 }
 
@@ -191,4 +208,107 @@ func normalizeHuggingFaceURL(original string) string {
 		original += "?download=true"
 	}
 	return original
+}
+
+func (s *DepinServer) HandleGetMetadata(c *gin.Context) {
+	var request struct {
+		IPFSHash string `json:"ipfs_hash"`
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON"})
+		return
+	}
+
+	metaPath := os.Getenv("M_META_PATH")
+	if metaPath == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "M_META_PATH not set"})
+		return
+	}
+
+	dbPath := fmt.Sprintf("%s/%s", metaPath, request.IPFSHash)
+
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to open DB: %v", err)})
+		return
+	}
+	defer db.Close()
+
+	type KeyValue struct {
+		Key   string `json:"key"`
+		Value string `json:"value"`
+	}
+
+	response := struct {
+		Metrics []KeyValue `json:"metrics"`
+		Params  []KeyValue `json:"params"`
+	}{
+		Metrics: []KeyValue{},
+		Params:  []KeyValue{},
+	}
+
+	tables := []string{"metrics", "params"}
+	for _, table := range tables {
+		// Check if table exists
+		var tableCount int
+		err := db.QueryRow("SELECT count(name) FROM sqlite_master WHERE type='table' AND name=?", table).Scan(&tableCount)
+		if err != nil || tableCount == 0 {
+			continue
+		}
+
+		// Query table rows
+		rows, err := db.Query(fmt.Sprintf("SELECT key, value FROM %s", table))
+		if err != nil {
+			continue 
+		}
+		defer rows.Close()
+
+		data := []KeyValue{}
+		for rows.Next() {
+			var kv KeyValue
+			if err := rows.Scan(&kv.Key, &kv.Value); err != nil {
+				continue
+			}
+			data = append(data, kv)
+		}
+
+		if table == "metrics" {
+			response.Metrics = data
+		} else {
+			response.Params = data
+		}
+	}
+	c.JSON(http.StatusOK, response)
+}
+
+func (s *DepinServer) HandleDownloadMetadata(c *gin.Context) {
+    ipfsHash := c.Param("ipfsHash")
+    if ipfsHash == "" {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "IPFS hash is required"})
+        return
+    }
+
+    metaPath := os.Getenv("M_META_PATH")
+    if metaPath == "" {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "M_META_PATH not set"})
+        return
+    }
+
+    filePath := fmt.Sprintf("%s/%s", metaPath, ipfsHash)
+
+    fileInfo, err := os.Stat(filePath)
+    if err != nil {
+        if os.IsNotExist(err) {
+            c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
+        } else {
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot access file"})
+        }
+        return
+    }
+    if fileInfo.Size() == 0 {
+        c.JSON(http.StatusNoContent, gin.H{"error": "File is empty"})
+        return
+    }
+    c.File(filePath)
 }

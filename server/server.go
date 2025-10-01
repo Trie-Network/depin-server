@@ -46,6 +46,8 @@ func (s *DepinServer) registerRoutes() {
 		} else {
 			utils.LogInfo("Depin Server is not accepting new assets, set ENABLE_ASSET_UPLOAD to true to allow uploads")
 		}
+		apiV1.POST("/metadata", s.HandleGetMetadata)
+		apiV1.GET("/metadata/download/:ipfsHash", s.HandleDownloadMetadata)
 	}
 }
 
