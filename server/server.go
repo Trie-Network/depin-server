@@ -43,6 +43,8 @@ func (s *DepinServer) registerRoutes() {
 			apiV1.POST("/inference", s.HandleInference)
 			apiV1.GET("/assets", s.HandleGetAssets)
 			apiV1.GET("/assets/download/:assetId", s.HandleDownloadAsset)
+			apiV1.GET("/ai-models/metadata/:assetId", s.HandleGetMLFlowMetadata)
+			apiV1.GET("/ai-models/metadata/download/:assetId", s.HandleDownloadMLFlowMetadata)
 		} else {
 			utils.LogInfo("Depin Server is not accepting new assets, set ENABLE_ASSET_UPLOAD to true to allow uploads")
 		}
