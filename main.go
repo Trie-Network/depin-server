@@ -51,6 +51,20 @@ func main() {
 		return
 	}
 
+	if os.Getenv("MODEL_METADATA_PATH") == "" { // optional, only needed if metadata download API is used
+		log.Println("MODEL_METADATA_PATH is not set, metadata download API will not work")
+		return
+	} else {
+		// Check if the directory already exists. If not, create it.
+		if _, err := os.Stat(os.Getenv("MODEL_METADATA_PATH")); os.IsNotExist(err) {
+			err := os.MkdirAll(os.Getenv("MODEL_METADATA_PATH"), os.ModePerm)
+			if err != nil {
+				log.Fatalf("Failed to create MODEL_METADATA_PATH directory: %v", err)
+				return
+			}
+		}
+	}
+
 	rubixNFTPath := os.Getenv("RUBIX_NFT_PATH")
 	if rubixNFTPath == "" {
 		log.Fatal("RUBIX_NFT_PATH is not set")
