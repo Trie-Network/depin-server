@@ -27,11 +27,13 @@ func main() {
 	inferenceStorageContractAddress := os.Getenv("INFERENCE_STORAGE_CONTRACT_ADDRESS")
 	if inferenceStorageContractAddress == "" {
 		log.Fatalf("INFERENCE_STORAGE_CONTRACT_ADDRESS is not set in .env")
+		return
 	}
 
 	rubixNodeAddress := os.Getenv("RUBIX_NODE_ADDRESS")
 	if rubixNodeAddress == "" {
 		log.Fatalf("RUBIX_NODE_ADDRESS is not set in .env")
+		return
 	}
 
 	assetStoreInfoThreshold := os.Getenv("ASSET_STORE_INFO_THRESHOLD")
@@ -42,14 +44,37 @@ func main() {
 	threshold, err := strconv.Atoi(assetStoreInfoThreshold)
 	if err != nil {
 		log.Fatalf("Invalid ASSET_STORE_INFO_THRESHOLD: %v", err)
+		return
 	}
 	if threshold <= 0 {
 		log.Fatalf("ASSET_STORE_INFO_THRESHOLD must be a positive integer")
+		return
+	}
+
+	if os.Getenv("MODEL_METADATA_PATH") == "" { // optional, only needed if metadata download API is used
+		log.Println("MODEL_METADATA_PATH is not set, metadata download API will not work")
+		return
+	} else {
+		// Check if the directory already exists. If not, create it.
+		if _, err := os.Stat(os.Getenv("MODEL_METADATA_PATH")); os.IsNotExist(err) {
+			err := os.MkdirAll(os.Getenv("MODEL_METADATA_PATH"), os.ModePerm)
+			if err != nil {
+				log.Fatalf("Failed to create MODEL_METADATA_PATH directory: %v", err)
+				return
+			}
+		}
+	}
+
+	rubixNFTPath := os.Getenv("RUBIX_NFT_PATH")
+	if rubixNFTPath == "" {
+		log.Fatal("RUBIX_NFT_PATH is not set")
+		return
 	}
 
 	storage, err := db.NewStorage(inferenceRecordDBPath, threshold)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
+		return
 	}
 
 	logFilePath := os.Getenv("LOG_FILE")
@@ -71,6 +96,7 @@ func main() {
 	depinServer := server.NewDepinServer(depinServerPort, storage, rubixNodeAddress)
 	if err := depinServer.Start(); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
+		return
 	}
 }
 
